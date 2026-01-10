@@ -134,7 +134,7 @@ public class UniswapPoolMonitor {
                 BigDecimal usd24Amount1 = new BigDecimal(amount1.abs()).divide(BigDecimal.TEN.pow(USD24_DECIMALS));
                 double v = (usd24Amount1.doubleValue() - usdcAmount.doubleValue()) / usd24Amount1.doubleValue();
 
-                System.out.println("USD24: " + amount1.doubleValue());
+                System.out.println("USD24: " + usd24Amount1.doubleValue());
                 // Check if USD24 swap is large (either in or out)
                 if (usd24Amount1.compareTo(THRESHOLD) >= 0) {
 
