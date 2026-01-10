@@ -85,7 +85,14 @@ public class UniswapPoolMonitor {
         }));
         // Keep the program running to listen for events
         System.out.println("Monitoring Uniswap Pool for large USD24 swaps...");
-        LockSupport.park();
+
+        while (true) {
+            try {
+                TimeUnit.SECONDS.sleep(30);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
 
     }
 
@@ -134,16 +141,16 @@ public class UniswapPoolMonitor {
                 BigDecimal usd24Amount1 = new BigDecimal(amount1.abs()).divide(BigDecimal.TEN.pow(USD24_DECIMALS));
                 double v = (usd24Amount1.doubleValue() - usdcAmount.doubleValue()) / usd24Amount1.doubleValue();
 
-                System.out.println("USD24: " + usd24Amount1.doubleValue());
+                System.out.println("USD24: " + amount1.doubleValue()/100);
                 // Check if USD24 swap is large (either in or out)
                 if (usd24Amount1.compareTo(THRESHOLD) >= 0) {
 
                     System.out.println("Large USD24 Swap Detected!");
-                    String content = "USDC Amount: " + usdcAmount + (amount0.signum() < 0 ? " (Out)" : " (In)") +
-                            "\nUSD24 Amount: " + usd24Amount1 + (amount1.signum() < 0 ? " (Out)" : " (In)") +
+                    String content = "USD24 Amount: " + usd24Amount1 + (amount1.signum() < 0 ? " (Out)" : " (In)") +
+                            "\nUSDC Amount: " + usdcAmount + (amount0.signum() < 0 ? " (Out)" : " (In)") +
 //                            "\nSender: " + log.getTopics().get(1).substring(26) +
 //                            "\nRecipient: " + log.getTopics().get(2).substring(26) +
-                            "\nTx: " + log.getTransactionHash() +
+//                            "\nTx: " + log.getTransactionHash() +
                             "\nBlock Number: " + log.getBlockNumber() +
                             "\nExchange rate: " + v;
                     System.out.println(content);
@@ -151,14 +158,14 @@ public class UniswapPoolMonitor {
 
                     //https://worker-notice.1132251350.workers.dev/?title=aa&content=bbb&jumpurl=www.baidu.com
                     // Send notification
-                    if (v > 0.02) {
+                    if (v > 0.02 && amount1.doubleValue() > 0) {
                         String title = "Large USD24 Swap Detected";
                         String jumpurl = "https://arbiscan.io/tx/" + log.getTransactionHash();
                         sendNotification(title, content, jumpurl);
                     }
 
-                    System.out.println("-----------------------------------");
                 }
+                System.out.println("-----------------------------------");
             } catch (Exception e) {
                 System.err.println("Error decoding log: " + e.getMessage());
             }
