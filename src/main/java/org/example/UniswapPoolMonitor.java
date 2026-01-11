@@ -4,12 +4,10 @@ import org.web3j.abi.EventEncoder;
 import org.web3j.abi.TypeReference;
 import org.web3j.abi.datatypes.Address;
 import org.web3j.abi.datatypes.Event;
-import org.web3j.abi.datatypes.generated.Int128;
 import org.web3j.abi.datatypes.generated.Int24;
 import org.web3j.abi.datatypes.generated.Int256;
 import org.web3j.abi.datatypes.generated.Uint128;
 import org.web3j.abi.datatypes.generated.Uint160;
-import org.web3j.protocol.Service;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.Web3jService;
 import org.web3j.protocol.core.DefaultBlockParameter;
@@ -18,22 +16,21 @@ import org.web3j.protocol.core.methods.request.EthFilter;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.protocol.websocket.WebSocketService;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 
 public class UniswapPoolMonitor {
 
@@ -43,6 +40,8 @@ public class UniswapPoolMonitor {
     private static BigDecimal THRESHOLD = new BigDecimal("100"); // Define "large" as >1000 USD24, adjust as needed
     private static final int USDC_DECIMALS = 6; // USDC has 6 decimals
     private static final int USD24_DECIMALS = 2; // USD24 has 2 decimals
+
+    private static double Rate = 0.025; // USD24 has 2 decimals
 
 
     // Uniswap V3 Swap event
@@ -69,28 +68,30 @@ public class UniswapPoolMonitor {
     private static Web3j web3j;
     private static Web3jService service;
 
+    private static long lastTime = System.currentTimeMillis();
 
     public static void main(String[] args) {
 
         connectAndSubscribe();
 
-        // 优雅关闭（生产中建议加上）
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try {
-                web3j.shutdown();
-                service.close();
-            } catch (Exception e) {
-                // ignore
-            }
-        }));
         // Keep the program running to listen for events
         System.out.println("Monitoring Uniswap Pool for large USD24 swaps...");
 
         while (true) {
             try {
+
+                if (System.currentTimeMillis() - lastTime > 10 * 60_000) {
+                    lastTime = System.currentTimeMillis();
+                    web3j.shutdown();
+                    service.close();
+                    System.out.println(new Date().toLocaleString() + " ,Reconnecting ........");
+                    connectAndSubscribe();
+                }
                 TimeUnit.SECONDS.sleep(30);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+            } catch (IOException e) {
+
             }
         }
 
@@ -129,6 +130,7 @@ public class UniswapPoolMonitor {
 
 
         web3j.ethLogFlowable(filter).subscribe(log -> {
+            lastTime = System.currentTimeMillis();
             try {
                 List<org.web3j.abi.datatypes.Type> decoded = org.web3j.abi.FunctionReturnDecoder.decode(
                         log.getData(), SWAP_EVENT.getNonIndexedParameters());
@@ -140,8 +142,8 @@ public class UniswapPoolMonitor {
                 BigDecimal usdcAmount = new BigDecimal(amount0.abs()).divide(BigDecimal.TEN.pow(USDC_DECIMALS));
                 BigDecimal usd24Amount1 = new BigDecimal(amount1.abs()).divide(BigDecimal.TEN.pow(USD24_DECIMALS));
                 double v = (usd24Amount1.doubleValue() - usdcAmount.doubleValue()) / usd24Amount1.doubleValue();
-
-                System.out.println("USD24: " + amount1.doubleValue()/100);
+                v = Double.valueOf("%.4f".formatted(v));
+                System.out.println(new Date().toLocaleString() + " ,USD24: " + amount1.doubleValue() / 100 + " ,R: " + v);
                 // Check if USD24 swap is large (either in or out)
                 if (usd24Amount1.compareTo(THRESHOLD) >= 0) {
 
@@ -158,7 +160,7 @@ public class UniswapPoolMonitor {
 
                     //https://worker-notice.1132251350.workers.dev/?title=aa&content=bbb&jumpurl=www.baidu.com
                     // Send notification
-                    if (v > 0.02 && amount1.doubleValue() > 0) {
+                    if (v > Rate && amount1.doubleValue() > 0) {
                         String title = "Large USD24 Swap Detected";
                         String jumpurl = "https://arbiscan.io/tx/" + log.getTransactionHash();
                         sendNotification(title, content, jumpurl);
@@ -230,9 +232,11 @@ public class UniswapPoolMonitor {
                 props.load(input);
                 String thresholdStr = props.getProperty("threshold", "1000");
                 String wsurl = props.getProperty("rpc.url", "");
+                String RateStr = props.getProperty("rate", "0.025");
                 try {
                     THRESHOLD = new BigDecimal(thresholdStr.trim());
                     RPC_URL = wsurl;
+                    Rate = Double.valueOf(RateStr).doubleValue();
                 } catch (Exception e) {
                     System.err.println(e);
                 }
@@ -241,7 +245,8 @@ public class UniswapPoolMonitor {
             System.err.println("Error loading config: " + e.getMessage());
         }
 
-        System.out.println(THRESHOLD.intValue());
-        System.out.println(RPC_URL);
+        System.out.println("THRESHOLD: " + THRESHOLD.intValue());
+        System.out.println("RPC_URL: " + RPC_URL);
+        System.out.println("Rate: " + Rate);
     }
 }
