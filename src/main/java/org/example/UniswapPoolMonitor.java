@@ -26,8 +26,8 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -41,7 +41,7 @@ public class UniswapPoolMonitor {
     private static final int USDC_DECIMALS = 6; // USDC has 6 decimals
     private static final int USD24_DECIMALS = 2; // USD24 has 2 decimals
 
-    private static double Rate = 0.025; // USD24 has 2 decimals
+    private static double Rate = 2.5; // 溢价2.5%
 
 
     // Uniswap V3 Swap event
@@ -84,7 +84,7 @@ public class UniswapPoolMonitor {
                     lastTime = System.currentTimeMillis();
                     web3j.shutdown();
                     service.close();
-                    System.out.println(new Date().toLocaleString() + " ,Reconnecting ........");
+                    System.out.println(getNow() + " ,Reconnecting ........");
                     connectAndSubscribe();
                 }
                 TimeUnit.SECONDS.sleep(30);
@@ -110,6 +110,7 @@ public class UniswapPoolMonitor {
             web3j = Web3j.build(service);
             subscribeToEvents();
             System.out.println("Connected and subscribed to Uniswap Pool events.");
+            System.out.println("-----------------------------------");
         } catch (Exception e) {
             System.err.println(e);
         }
@@ -142,19 +143,20 @@ public class UniswapPoolMonitor {
                 BigDecimal usdcAmount = new BigDecimal(amount0.abs()).divide(BigDecimal.TEN.pow(USDC_DECIMALS));
                 BigDecimal usd24Amount1 = new BigDecimal(amount1.abs()).divide(BigDecimal.TEN.pow(USD24_DECIMALS));
                 double v = (usd24Amount1.doubleValue() - usdcAmount.doubleValue()) / usd24Amount1.doubleValue();
-                v = Double.valueOf("%.4f".formatted(v));
-                System.out.println(new Date().toLocaleString() + " ,USD24: " + amount1.doubleValue() / 100 + " ,R: " + v);
+                v = Double.valueOf("%.2f".formatted(v * 100));
+//                System.out.println(new Date().toLocaleString() + " ,USD24: " + amount1.doubleValue() / 100 + " ,R: " + v);
                 // Check if USD24 swap is large (either in or out)
                 if (usd24Amount1.compareTo(THRESHOLD) >= 0) {
-
-                    System.out.println("Large USD24 Swap Detected!");
+                    if (amount1.signum() < 0) {
+                        System.out.println("#########  Bad news  #########");
+                    }
                     String content = "USD24 Amount: " + usd24Amount1 + (amount1.signum() < 0 ? " (Out)" : " (In)") +
                             "\nUSDC Amount: " + usdcAmount + (amount0.signum() < 0 ? " (Out)" : " (In)") +
 //                            "\nSender: " + log.getTopics().get(1).substring(26) +
 //                            "\nRecipient: " + log.getTopics().get(2).substring(26) +
 //                            "\nTx: " + log.getTransactionHash() +
                             "\nBlock Number: " + log.getBlockNumber() +
-                            "\nExchange rate: " + v;
+                            "\nExchange rate: " + v + "%";
                     System.out.println(content);
 
 
@@ -165,7 +167,8 @@ public class UniswapPoolMonitor {
                         String jumpurl = "https://arbiscan.io/tx/" + log.getTransactionHash();
                         sendNotification(title, content, jumpurl);
                     }
-
+                } else {
+                    System.out.println(getNow() + " ,USD24: " + amount1.doubleValue() / 100 + " ,R: " + v + "%");
                 }
                 System.out.println("-----------------------------------");
             } catch (Exception e) {
@@ -248,5 +251,14 @@ public class UniswapPoolMonitor {
         System.out.println("THRESHOLD: " + THRESHOLD.intValue());
         System.out.println("RPC_URL: " + RPC_URL);
         System.out.println("Rate: " + Rate);
+    }
+
+    public static String getNow() {
+        // 获取当前时间
+        LocalDateTime now = LocalDateTime.now();
+        // 定义目标格式：yyyy-MM-dd HH:mm
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        // 格式化并打印
+        return now.format(formatter);
     }
 }
