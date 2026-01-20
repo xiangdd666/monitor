@@ -42,6 +42,8 @@ public class UniswapPoolMonitor {
     private static final int USD24_DECIMALS = 2; // USD24 has 2 decimals
 
     private static double Rate = 2.5; // 溢价2.5%
+    private static String NoticeUrl = "";
+
 
 
     // Uniswap V3 Swap event
@@ -142,7 +144,7 @@ public class UniswapPoolMonitor {
                 // Convert to human-readable amounts (absolute values for simplicity)
                 BigDecimal usdcAmount = new BigDecimal(amount0.abs()).divide(BigDecimal.TEN.pow(USDC_DECIMALS));
                 BigDecimal usd24Amount1 = new BigDecimal(amount1.abs()).divide(BigDecimal.TEN.pow(USD24_DECIMALS));
-                double v = (usd24Amount1.doubleValue() - usdcAmount.doubleValue()) / usd24Amount1.doubleValue();
+                double v = (usd24Amount1.doubleValue() - usdcAmount.doubleValue()) / usdcAmount.doubleValue();
                 v = Double.valueOf("%.2f".formatted(v * 100));
 //                System.out.println(new Date().toLocaleString() + " ,USD24: " + amount1.doubleValue() / 100 + " ,R: " + v);
                 // Check if USD24 swap is large (either in or out)
@@ -204,7 +206,7 @@ public class UniswapPoolMonitor {
             String encodedContent = URLEncoder.encode(content, StandardCharsets.UTF_8.toString());
             String encodedJumpurl = URLEncoder.encode(jumpurl, StandardCharsets.UTF_8.toString());
 
-            String notificationUrl = "https://notice.dyna123.fun/?title=" + encodedTitle +
+            String notificationUrl = NoticeUrl+"?title=" + encodedTitle +
                     "&content=" + encodedContent + "&jumpurl=" + encodedJumpurl;
 
             URL url = new URL(notificationUrl);
@@ -236,6 +238,7 @@ public class UniswapPoolMonitor {
                 String thresholdStr = props.getProperty("threshold", "1000");
                 String wsurl = props.getProperty("rpc.url", "");
                 String RateStr = props.getProperty("rate", "0.025");
+                NoticeUrl = props.getProperty("noticeUrl", "");
                 try {
                     THRESHOLD = new BigDecimal(thresholdStr.trim());
                     RPC_URL = wsurl;
